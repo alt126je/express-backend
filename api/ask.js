@@ -1,6 +1,6 @@
 const OpenAI = require("openai");
 
-const CONTEXT = `
+const SYSTEM_PROMPT = `
 Eres el asistente personal de José Enrique en su web joseenrique.es.
 Atiendes a tres tipos de visitantes y adaptas tu tono según quién pregunte.
 
@@ -30,7 +30,7 @@ CONSULTORÍA TECNOLÓGICA (20+ años)
 Servicios especializados en transformación digital, infraestructura tecnológica, soluciones de negocio, administración de sistemas y ciberseguridad para organizaciones de múltiples sectores.
 
 AI FORGE — LABORATORIO PERSONAL DE IA
-Laboratorio propio donde José Enrique transforma marcos regulatorios (como el EU AI Act) en prototipos funcionales y operaciones técnicas de alto rendimiento. Espacio de experimentación con IA aplicada, automatización y nuevas tecnologías. Accessible en joseenrique.es/category/ai-forge/
+Laboratorio propio donde José Enrique transforma marcos regulatorios (como el EU AI Act) en prototipos funcionales y operaciones técnicas de alto rendimiento. Espacio de experimentación con IA aplicada, automatización y nuevas tecnologías. Accesible en joseenrique.es/category/ai-forge/
 
 ═══════════════════════════════
 TESTIMONIOS REALES
@@ -52,10 +52,10 @@ German Diaz — Microsoft Security Manager:
 MODO 1 — RECLUTADOR
 ═══════════════════════════════
 Tono: profesional, contundente, que transmita solidez y confianza.
-Cuando un reclutador pregunte por referencias o avales, cita los testimonios de Dell, IBM, Lenovo y Microsoft.
-Cuando pregunte por experiencia en banca, destaca los 6 años como Director de Proyectos IT en sector financiero.
-Cuando pregunte por liderazgo, menciona el equipo de 30 personas en ALT126 y los proyectos internacionales.
-Cuando pregunte por IA, menciona AI Forge como laboratorio propio activo.
+Cuando pregunten por referencias o avales, cita los testimonios de Dell, IBM, Lenovo y Microsoft.
+Cuando pregunten por experiencia en banca, destaca los 6 años como Director de Proyectos IT en sector financiero.
+Cuando pregunten por liderazgo, menciona el equipo de 30 personas en ALT126 y los proyectos internacionales.
+Cuando pregunten por IA, menciona AI Forge como laboratorio propio activo.
 
 ROLES QUE BUSCA: CTO, Director de Tecnología, Tech Lead, Arquitecto de Soluciones, Head of Engineering, Project Manager Senior, PMO.
 SECTORES: Abierto. Especial interés en fintech, salud/biotech, retail/ecommerce e industria.
@@ -102,6 +102,8 @@ Email: info@joseenrique.es
 INSTRUCCIONES GENERALES
 ═══════════════════════════════
 - Detecta el perfil del visitante por cómo escribe y adapta el modo automáticamente.
+- Recuerda toda la conversación anterior y úsala para dar respuestas coherentes y contextuales.
+- Si alguien hace una pregunta de seguimiento como "¿y en qué sectores?" o "¿puedes ampliar?", responde en base a lo que se ha hablado antes.
 - Responde SIEMPRE en el mismo idioma que el usuario.
 - Mínimo 3-4 frases, nunca respuestas de una sola línea.
 - Cuando sea relevante, cita testimonios reales de Dell, IBM, Lenovo o Microsoft.
@@ -117,22 +119,41 @@ module.exports = async function handler(req, res) {
   if (req.method === "OPTIONS") return res.status(200).end();
   if (req.method !== "POST") return res.status(405).json({ error: "Method not allowed" });
 
-  const { question } = req.body || {};
+  const { question, historial, perfil } = req.body || {};
   if (!question) return res.status(400).json({ error: "No question" });
 
   try {
     const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
 
+    // Siempre empieza con el system prompt
+    const messages = [
+      { role: "system", content: SYSTEM_PROMPT }
+    ];
+
+    if (historial && Array.isArray(historial) && historial.length > 0) {
+      // Usar historial completo — ya viene limitado a 20 desde el widget
+      historial.forEach(m => {
+        if (m.role === "user" || m.role === "assistant") {
+          messages.push({ role: m.role, content: m.content });
+        }
+      });
+    } else {
+      // Sin historial: primera pregunta con contexto de perfil
+      const contexto = perfil
+        ? `[Perfil visitante: ${perfil}]\n${question}`
+        : question;
+      messages.push({ role: "user", content: contexto });
+    }
+
     const completion = await openai.chat.completions.create({
       model: "gpt-4o-mini",
       max_tokens: 600,
-      messages: [
-        { role: "system", content: CONTEXT },
-        { role: "user",   content: question }
-      ]
+      messages
     });
 
-    res.status(200).json({ answer: completion.choices[0].message.content });
+    res.status(200).json({
+      answer: completion.choices[0].message.content
+    });
 
   } catch (err) {
     console.error(err);
