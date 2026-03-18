@@ -2,7 +2,6 @@
   "name": "je-chatbot-api",
   "version": "1.0.0",
   "dependencies": {
-    "openai": "^4.0.0",
-    "cors": "^2.8.5"
+    "openai": "^4.0.0"
   }
 }
